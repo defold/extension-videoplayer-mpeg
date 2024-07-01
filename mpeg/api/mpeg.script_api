@@ -1,0 +1,87 @@
+- name: mpeg
+  type: table
+  desc: Functions to play MPEG1 videos
+
+  members:
+
+  - name: open
+    type: function
+    desc: Open a video
+
+    parameters:
+      - name: video
+        type: buffer
+        desc: The video data as a buffer. Ownership is not transferred.
+
+    return:
+      - name: success
+        type: boolean
+        desc: Returns true if the video was opened successfully
+
+      - name: err
+        type: string
+        desc: Error message if video failed to open
+
+
+#*****************************************************************************************************
+
+  - name: close
+    type: function
+    desc: Close the opened video. This will release an memory allocated by the videoplayer
+
+#*****************************************************************************************************
+
+  - name: decode
+    type: function
+    desc: Advance the internal timer by seconds and decode video/audio up to this time.
+
+    parameters:
+      - name: seconds
+        type: number
+        desc: Number of seconds to advance
+
+#*****************************************************************************************************
+
+  - name: seek
+    type: function
+    desc: Seek to the specified time. Will seek to the last intra frame just before the desired time.
+
+    parameters:
+      - name: time
+        type: number
+        desc: Time to seek to.
+
+#*****************************************************************************************************
+
+  - name: get_frame
+    type: function
+    desc: Get the video frame buffer. The video frame buffer will be updated
+          each time decode() is called.
+
+    returns:
+      - name: frame
+        type: buffer
+        desc: The decoded video frame buffer.
+
+#*****************************************************************************************************
+
+  - name: get_info
+    type: function
+    desc: Get information about the opened video
+
+    returns:
+      - name: info
+        type: table
+        desc: Video information
+        parameters:
+          - name: width
+            type: number
+            desc: Video width
+
+          - name: height
+            type: number
+            desc: Vide height
+
+          - name: bytes_per_pixel
+            type: number
+            desc: The number of bytes per pixel
