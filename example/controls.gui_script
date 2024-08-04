@@ -61,6 +61,10 @@ function on_input(self, action_id, action)
 			update_playback(self)
 			post_to_player("stop")
 			select(gui.get_node("stop"))
+		elseif gui.pick_node(gui.get_node("rewind"), action.x, action.y) then
+			update_playback(self)
+			post_to_player("rewind")
+			select(gui.get_node("rewind"))
 		end
 	end
 end

@@ -181,7 +181,8 @@ static int Seek(lua_State* L)
 {
     DM_LUA_STACK_CHECK(L, 0);
     double time = luaL_checknumber(L, 1);
-    plm_seek(g_plm, time, false);
+    bool seek_exact = lua_toboolean(L, 2);
+    plm_seek(g_plm, time, seek_exact);
     return 0;
 }
 

@@ -49,5 +49,9 @@ function on_message(self, message_id, message, sender)
     elseif message_id == hash("stop") then
         self.playback_speed = 0
         open(self, VIDEONAME)
+    elseif message_id == hash("rewind") then
+        local info = mpeg.get_info()
+        local time = math.max(info.time - 1, 0)
+        mpeg.seek(time, false)
     end
 end

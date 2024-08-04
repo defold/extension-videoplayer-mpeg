@@ -51,6 +51,13 @@
         type: number
         desc: Time to seek to.
 
+      - name: seek_exact
+        type: boolean
+        desc: If value is true the function will seek to the exact time, otherwise it will 
+              seek to the last intra frame just before the desired time. Exact seeking can 
+              be slow, because all frames up to the seeked one have to be decoded on top of
+              the previous intra frame. Defaults to false.
+
 #*****************************************************************************************************
 
   - name: get_frame
