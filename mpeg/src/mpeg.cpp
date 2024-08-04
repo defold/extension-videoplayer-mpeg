@@ -172,7 +172,10 @@ static int Decode(lua_State* L)
 {
     DM_LUA_STACK_CHECK(L, 0);
     double seconds = luaL_checknumber(L, 1);
-    plm_decode(g_plm, seconds);
+    if (!plm_has_ended(g_plm))
+    {
+        plm_decode(g_plm, seconds);
+    }
     return 0;
 }
 
