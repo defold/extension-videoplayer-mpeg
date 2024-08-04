@@ -11,7 +11,8 @@ assert(mpeg.open(buffer, { loop = true }))
 
 -- get video information
 local info = mpeg.get_info()
-print(info.width, info.height)
+print(info.width, info.height)	-- video width and height
+print(info.time, info.duration)	-- current playback time and video duration
 
 -- get the buffer where video frames will be decoded
 local framebuffer = mpeg.get_frame()
@@ -19,8 +20,9 @@ local framebuffer = mpeg.get_frame()
 -- advance playback and decode a new frame
 mpeg.decode(seconds)
 
--- seek to 10 seconds and decode a new frame
-mpeg.seek(10)
+-- seek to exactly 10 seconds and decode a new frame
+local exact = true
+mpeg.seek(10, exact)
 
 -- close video and release all resources
 mpeg.close()
