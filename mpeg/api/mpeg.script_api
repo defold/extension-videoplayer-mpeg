@@ -4,30 +4,37 @@
 
   members:
 
+#*****************************************************************************************************
+
   - name: open
     type: function
-    desc: Open a video
+    desc: Open a video for decoding. 
 
     parameters:
       - name: video
-        type: buffer
-        desc: The video data as a buffer. Ownership is not transferred.
+        type: buffer|string
+        desc: The video data as a buffer or string. Ownership of the buffer is not transferred.
 
     return:
-      - name: success
-        type: boolean
-        desc: Returns true if the video was opened successfully
+      - name: handle
+        type: number
+        desc: Returns video handle. Use in subsequent calls.
 
       - name: err
         type: string
-        desc: Error message if video failed to open
+        desc: Error message if video failed to open.
 
 
 #*****************************************************************************************************
 
   - name: close
     type: function
-    desc: Close the opened video. This will release an memory allocated by the videoplayer
+    desc: Close an opened video. This will release an memory allocated by the videoplayer.
+
+    parameters:
+      - name: handle
+        type: number
+        desc: The video handle to close.
 
 #*****************************************************************************************************
 
@@ -36,9 +43,38 @@
     desc: Advance the internal timer by seconds and decode video/audio up to this time.
 
     parameters:
+      - name: handle
+        type: number
+        desc: The video handle to decode.
+
       - name: seconds
         type: number
-        desc: Number of seconds to advance
+        desc: Number of seconds to advance.
+
+#*****************************************************************************************************
+
+  - name: write
+    type: function
+    desc: Write data to the internal stream buffer of a video started with stream(). Use the `streaming_buffer_bytes_remaining` and `streaming_buffer_capacity` to determine how much
+          data to write to the buffer.
+
+    parameters:
+      - name: handle
+        type: number
+        desc: The video handle to write to.
+
+      - name: data
+        type: string
+        desc: Bytes with stream data.
+
+    returns:
+      - name: bytes_written
+        type: number
+        desc: The number of written bytes or nil if writing failed.
+
+      - name: error
+        type: string
+        desc: Error message if writing failed for some reason.
 
 #*****************************************************************************************************
 
@@ -47,6 +83,10 @@
     desc: Seek to the specified time. Will seek to the last intra frame just before the desired time.
 
     parameters:
+      - name: handle
+        type: number
+        desc: The video handle to seek on.
+
       - name: time
         type: number
         desc: Time to seek to.
@@ -60,21 +100,43 @@
 
 #*****************************************************************************************************
 
+  - name: rewind
+    type: function
+    desc: Rewind video to the beginning.
+
+    parameters:
+      - name: handle
+        type: number
+        desc: The video handle to rewind.
+
+#*****************************************************************************************************
+
   - name: get_frame
     type: function
     desc: Get the video frame buffer. The video frame buffer will be updated
-          each time decode() is called.
+          when decode() is called and enough data has been decoded to produce a frame.
+
+    parameters:
+      - name: handle
+        type: number
+        desc: The video handle to get frame buffer for.
 
     returns:
       - name: frame
         type: buffer
-        desc: The decoded video frame buffer.
+        desc: The decoded video frame buffer or nil if no video frame buffer is available. The
+              ownership of the buffer is not transferred to the caller.
 
 #*****************************************************************************************************
 
   - name: get_info
     type: function
-    desc: Get information about the opened video
+    desc: Get information about an opened video.
+
+    parameters:
+      - name: handle
+        type: number
+        desc: The video to get info for.
 
     returns:
       - name: info
@@ -83,12 +145,42 @@
         parameters:
           - name: width
             type: number
-            desc: Video width
+            desc: Video width.
 
           - name: height
             type: number
-            desc: Vide height
+            desc: Video height.
 
           - name: bytes_per_pixel
             type: number
-            desc: The number of bytes per pixel
+            desc: The number of bytes per pixel.
+
+          - name: framerate
+            type: number
+            desc: The frame rate (frames per second) of the video stream.
+
+          - name: samplerate
+            type: number
+            desc: The sample rate (samples per second) of the audio stream.
+
+          - name: is_looping
+            type: boolean
+            desc: If the video is looping or not.
+
+          - name: is_streaming
+            type: boolean
+            desc: If the video is opened in streaming mode.
+
+          - name: eos
+            type: boolean
+            desc: If the video has reached the end of stream.
+
+          - name: streaming_buffer_bytes_remaining
+            type: number
+            desc: The number of unread bytes remaining in the stream buffer when streaming.
+
+          - name: streaming_buffer_capacity
+            type: number
+            desc: The capacity of the stream buffer in bytes.
+
+            

@@ -2,17 +2,51 @@ go.property("playback_speed", 1)
 
 local VIDEONAME = "/videos/big_buck_bunny.mpeg"
 
+local function close(self)
+    if self.video then
+        mpeg.close(self.video)
+        self.video = nil
+    end
+end
+
 local function open(self, filename)
+    close(self)
+
     local options = {
         audio = false,
         loop = true,
     }
     local videoresource = resource.load(filename)
-    assert(mpeg.open(videoresource, options))
-    self.video = true
-    local videoinfo = mpeg.get_info()
-    self.videoheader = { width=videoinfo.width, height=videoinfo.height, type=resource.TEXTURE_TYPE_2D, format=resource.TEXTURE_FORMAT_RGB, num_mip_maps=1 }
-    self.videoframe = mpeg.get_frame()
+    local video, err = mpeg.open(videoresource, options)
+    if err then
+        error(err)
+        return
+    end
+    self.video = video
+end
+
+local function stream(self, filename)
+    close(self)
+
+    local options = {
+        audio = false,
+        loop = true,
+    }
+
+    -- in this example we fake streaming by loading the entire video
+    -- to a string and then gradually write portions of it to the
+    -- extension
+    -- in a real scenario you would read bytes from some other source
+    -- such as disk or network
+    self.streaming_data_index = 1
+    self.streaming_data = sys.load_resource(filename)
+
+    local video, err = mpeg.stream(options)
+    if err then
+        error(err)
+        return
+    end
+    self.video = video
 end
 
 function init(self)
@@ -23,19 +57,56 @@ function init(self)
     local scale_height = screen_height / logosize
     
     go.set("#sprite", "scale", vmath.vector3(scale_width, scale_height, 1) )
-                                        
+
+    self.frame_count = 0
+    --stream(self, VIDEONAME)
     open(self, VIDEONAME)
 end
 
 function final(self)
-    mpeg.close()
+    close(self)
 end
 
 function update(self, dt)
-    if self.video then
-        mpeg.decode(dt * self.playback_speed)
+    self.frame_count = self.frame_count + 1
+    if not self.video then
+        return
+    end
+    if self.playback_speed == 0 then
+        return
+    end
+
+    local info = mpeg.get_info(self.video)
+    msg.post("#controls", "info", info)
+
+    -- check if the video is streaming and if it needs any bytes
+    if info.is_streaming and self.frame_count % 5 == 0 then
+        local bytes_needed = info.streaming_buffer_capacity - info.streaming_buffer_bytes_remaining
+        if bytes_needed > 0 then
+            local from = self.streaming_data_index
+            local to = math.min(#self.streaming_data, from + bytes_needed - 1)
+            local amount = to - from + 1
+            self.streaming_data_index = self.streaming_data_index + amount
+
+            local bytes = self.streaming_data:sub(from, to)
+            mpeg.write(self.video, bytes)
+
+            if from > #self.streaming_data then
+                mpeg.rewind(self.video)
+                self.streaming_data_index = 0
+            end
+        end
+    end
+
+    -- decode video
+    mpeg.decode(self.video, dt * self.playback_speed)
+
+    -- get a video frame and update the texture
+    local videoframe = mpeg.get_frame(self.video)
+    if videoframe then
+        local videoheader = { width=info.width, height=info.height, type=resource.TEXTURE_TYPE_2D, format=resource.TEXTURE_FORMAT_RGB, num_mip_maps=1 }
         local path = go.get("#sprite", "texture0")
-        resource.set_texture(path, self.videoheader, self.videoframe)
+        resource.set_texture(path, videoheader, videoframe)
     end
 end
 
@@ -48,10 +119,16 @@ function on_message(self, message_id, message, sender)
         self.playback_speed = message.playback_speed
     elseif message_id == hash("stop") then
         self.playback_speed = 0
-        open(self, VIDEONAME)
+        if mpeg.get_info(self.video).is_streaming then
+            stream(self, VIDEONAME)
+        else
+            open(self, VIDEONAME)
+        end
     elseif message_id == hash("rewind") then
-        local info = mpeg.get_info()
-        local time = math.max(info.time - 1, 0)
-        mpeg.seek(time, false)
+        if self.video then
+            local info = mpeg.get_info(self.video)
+            local time = math.max(info.time - 1, 0)
+            mpeg.seek(self.video, time, false)
+        end
     end
 end
