@@ -29,5 +29,5 @@ package = com.defoldexample.videoplayer
 bundle_identifier = com.defoldexample.videoplayer
 
 [library]
-include_dirs = videoplayer
+include_dirs = mpeg
 
