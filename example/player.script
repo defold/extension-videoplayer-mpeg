@@ -16,8 +16,8 @@ local function open(self, filename)
         audio = false,
         loop = true,
     }
-    local videoresource = resource.load(filename)
-    local video, err = mpeg.open(videoresource, options)
+    self.videoresource = resource.load(filename)
+    local video, err = mpeg.open(self.videoresource, options)
     if err then
         error(err)
         return
