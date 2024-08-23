@@ -6,6 +6,8 @@ local function close(self)
     if self.video then
         mpeg.close(self.video)
         self.video = nil
+        self.video_data = nil
+        self.streaming_data = nil
     end
 end
 
@@ -16,9 +18,10 @@ local function open(self, filename)
         audio = false,
         loop = true,
     }
-    self.videoresource = resource.load(filename)
-    local video, err = mpeg.open(self.videoresource, options)
+    self.video_data = resource.load(filename)
+    local video, err = mpeg.open(self.video_data, options)
     if err then
+        self.video_data = nil
         error(err)
         return
     end
@@ -43,6 +46,7 @@ local function stream(self, filename)
 
     local video, err = mpeg.stream(options)
     if err then
+        self.streaming_data = nil
         error(err)
         return
     end
