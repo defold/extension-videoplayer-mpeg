@@ -4,3 +4,6 @@
 Thumbs.db
 manifest.private.der
 manifest.public.der
+/.editor_settings
+debug.keystore.pass.txt
+debug.keystore

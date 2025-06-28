@@ -19,7 +19,13 @@ struct MPEG1Video {
     plm_buffer_t*              m_StreamBuffer;
     dmBuffer::HBuffer          m_FrameBuffer;
     int                        m_FrameBufferLuaRef;
+    uint32_t                   m_Id;
+    uint32_t                   m_ArrayIndex;
 };
+
+static int g_VideoIdCounter = 0;
+static dmArray<MPEG1Video*> g_Videos;
+
 
 // from pl_mpeg.h with flip on the vertical axis
 static const int RI = 0;
@@ -109,26 +115,15 @@ static void OnAudioSamplesDecoded(plm_t *mpeg, plm_samples_t *samples, void *use
     // SDL_QueueAudio(self->audio_device, samples->interleaved, size);
 }
 
-
-static MPEG1Video* CheckVideo(lua_State* L, int index)
+static MPEG1Video* CreateVideo(plm_t* plm, plm_buffer_t* streambuffer, lua_State* L, int options_index)
 {
-    MPEG1Video* video = (MPEG1Video*)(uintptr_t)luaL_checknumber(L, index);
-    if (video == 0x0)
-    {
-        luaL_error(L, "%s", "Video is null");
-    }
-    return video;
-}
 
-
-static void SetVideoOptions(MPEG1Video* video, lua_State* L, int index)
-{
     // Read options and set on decoder
     bool loop_video = false;
     bool enable_audio = false;
-    if (!lua_isnil(L, index)) {
-        luaL_checktype(L, index, LUA_TTABLE);
-        lua_pushvalue(L, index);
+    if (!lua_isnil(L, options_index)) {
+        luaL_checktype(L, options_index, LUA_TTABLE);
+        lua_pushvalue(L, options_index);
         lua_pushnil(L);
         while (lua_next(L, -2)) {
             const char* option = lua_tostring(L, -2);
@@ -150,15 +145,69 @@ static void SetVideoOptions(MPEG1Video* video, lua_State* L, int index)
     if (enable_audio) {
         plm_set_audio_decode_callback(video->m_plm, OnAudioSamplesDecoded, video);
     }
+
+    // push new video to array
+    // set unique id for lookup from Lua
+    video->m_Id = g_VideoIdCounter++;
+    if (g_Videos.Full()) g_Videos.OffsetCapacity(1);
+    g_Videos.Push(video);
+    return video;
 }
+
+static MPEG1Video* CheckVideo(lua_State* L, int index)
+{
+    int id = luaL_checknumber(L, index);
+    for (int i = 0; i < g_Videos.Size(); i++)
+    {
+        MPEG1Video* video = g_Videos[i];
+        if (video->m_Id == id)
+        {
+            // update array index, it may have changed when
+            // another video was destroyed
+            video->m_ArrayIndex = i;
+            return video;
+        }
+    }
+    luaL_error(L, "%s", "Video is null");
+}
+
+static void PushVideo(lua_State* L, MPEG1Video* video)
+{
+    lua_pushnumber(L, video->m_Id);
+}
+
+
+static void DestroyVideo(lua_State* L, MPEG1Video* video)
+{
+    if (video->m_FrameBufferLuaRef != 0)
+    {
+        // We want it destroyed by the GC
+        dmScript::Unref(L, LUA_REGISTRYINDEX, video->m_FrameBufferLuaRef);
+        video->m_FrameBufferLuaRef = 0;
+    }
+
+    if (video->m_FrameBuffer != 0)
+    {
+        dmBuffer::Destroy(video->m_FrameBuffer);
+        video->m_FrameBuffer = 0;
+    }
+
+    if (video->m_plm != 0)
+    {
+        plm_destroy(video->m_plm);
+        video->m_plm = 0;
+    }
+    g_Videos.EraseSwap(video->m_ArrayIndex);
+
+    delete video;
+}
+
+
 
 
 static int Open(lua_State* L)
 {
     DM_LUA_STACK_CHECK(L, 2);
-
-    MPEG1Video* video = new MPEG1Video;
-    memset(video, 0, sizeof(*video));
 
     uint8_t* videodata = 0;
     size_t videodatasize = 0;
@@ -183,18 +232,19 @@ static int Open(lua_State* L)
 
     // Create the decoder with the data from the video buffer
     bool free_when_done = false;
-    video->m_plm = plm_create_with_memory(videodata, videodatasize, free_when_done);
+    plm_t* plm = plm_create_with_memory(videodata, videodatasize, free_when_done);
     // validate opened video buffer
-    if (!plm_probe(video->m_plm, 5000 * 1024)) {
+    if (!plm_probe(plm, 5000 * 1024)) {
+        plm_destroy(plm);
         lua_pushboolean(L, 0);
         lua_pushstring(L, "No MPEG video or audio streams found");
         return 2;
     }
 
-    SetVideoOptions(video, L, 2);
+    MPEG1Video* video = CreateVideo(plm, 0x0, L, 2);
 
     // ok!
-    lua_pushnumber(L, (uintptr_t)video);
+    PushVideo(L, video);
     lua_pushnil(L);
     return 2;
 }
@@ -204,19 +254,16 @@ static int Stream(lua_State* L)
 {
     DM_LUA_STACK_CHECK(L, 2);
 
-    MPEG1Video* video = new MPEG1Video;
-    memset(video, 0, sizeof(*video));
 
-    video->m_StreamBuffer = plm_buffer_create_with_capacity(STREAMING_BUFFER_CAPACITY);
-
+    plm_buffer_t* streambuffer = plm_buffer_create_with_capacity(STREAMING_BUFFER_CAPACITY);
     int destroy_when_done = true;
-    video->m_plm = plm_create_with_buffer(video->m_StreamBuffer, destroy_when_done);
+    plm_t* plm = plm_create_with_buffer(streambuffer, destroy_when_done);
     // plm_buffer_set_load_callback(video->m_StreamBuffer, OnVideoBufferNeedsData, video);
 
-    SetVideoOptions(video, L, 1);
+    MPEG1Video* video = CreateVideo(plm, streambuffer, L, 1);
 
     // ok!
-    lua_pushnumber(L, (uintptr_t)video);
+    PushVideo(L, video);
     lua_pushnil(L);
     return 2;
 }
@@ -253,30 +300,12 @@ static int Write(lua_State* L)
     return 0;
 }
 
-
 static int Close(lua_State* L)
 {
     DM_LUA_STACK_CHECK(L, 0);
-
+    
     MPEG1Video* video = CheckVideo(L, 1);
-
-    if (video->m_FrameBufferLuaRef != 0)
-    {
-        // We want it destroyed by the GC
-        dmScript::Unref(L, LUA_REGISTRYINDEX, video->m_FrameBufferLuaRef);
-        video->m_FrameBufferLuaRef = 0;
-    }
-
-    if (video->m_FrameBuffer != 0)
-    {
-        dmBuffer::Destroy(video->m_FrameBuffer);
-        video->m_FrameBuffer = 0;
-    }
-
-    plm_destroy(video->m_plm);
-    video->m_plm = 0;
-
-    delete video;
+    DestroyVideo(L, video);
     return 0;
 }
 
@@ -447,6 +476,12 @@ dmExtension::Result AppFinalizeVideoPlayerMPEG1(dmExtension::AppParams* params)
 
 dmExtension::Result FinalizeVideoPlayerMPEG1(dmExtension::Params* params)
 {
+    while (!g_Videos.Empty())
+    {
+        MPEG1Video* video = g_Videos[0];
+        video->m_ArrayIndex = 0;
+        DestroyVideo(params->m_L, video);
+    }
     return dmExtension::RESULT_OK;
 }
 
