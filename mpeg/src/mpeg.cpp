@@ -117,6 +117,10 @@ static void OnAudioSamplesDecoded(plm_t *mpeg, plm_samples_t *samples, void *use
 
 static MPEG1Video* CreateVideo(plm_t* plm, plm_buffer_t* streambuffer, lua_State* L, int options_index)
 {
+    MPEG1Video* video = new MPEG1Video;
+    memset(video, 0x0, sizeof(MPEG1Video));
+    video->m_plm = plm;
+    video->m_StreamBuffer = streambuffer;
 
     // Read options and set on decoder
     bool loop_video = false;
